@@ -19,26 +19,14 @@ function promisify(request) {
 // Opens questDB. Version 1 has three stores: "heroes", "inventory", and "powers".
 // Gives back (a promise for) the open database.
 function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains("heroes")) {
-        db.createObjectStore("heroes", { keyPath: "name" });
-      }
-      if (!db.objectStoreNames.contains("inventory")) {
-        db.createObjectStore("inventory", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("powers")) {
-        db.createObjectStore("powers", { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  const request = indexedDB.open(DB_NAME, DB_VERSION);
+  request.onupgradeneeded = () => {
+    const db = request.result;
+    db.createObjectStore("heroes", { keyPath: "name" });
+    db.createObjectStore("inventory", { keyPath: "id" });
+    db.createObjectStore("powers", { keyPath: "id" });
+  };
+  return promisify(request);
 }
 
 // ---------- Level 1: Heroes ----------
@@ -47,27 +35,20 @@ function openDB() {
 // Build a NEW hero record (see the DATA SPEC) and save it. Give back the record.
 // A name that is already taken should fail, not replace the old hero.
 async function createHero(name, heroClass, attributes) {
-  const db = await openDB();
-  const store = db.transaction("heroes", "readwrite").objectStore("heroes");
-
-  const existing = await promisify(store.get(name));
-  if (existing) {
-    throw new Error(`Hero "${name}" already exists.`);
-  }
-
-  const maxHp = 10 + modifier(attributes.constitution);
+  const hp = 10 + modifier(attributes.constitution);
   const hero = {
-    name,
-    heroClass,
+    name: name,
+    heroClass: heroClass,
     level: 1,
     xp: 0,
-    hp: maxHp,
-    maxHp,
+    hp: hp,
+    maxHp: hp,
     gold: 10,
-    attributes,
+    attributes: attributes,
     createdAt: new Date().toISOString(),
   };
-
+  const db = await openDB();
+  const store = db.transaction("heroes", "readwrite").objectStore("heroes");
   await promisify(store.add(hero));
   return hero;
 }
@@ -91,7 +72,7 @@ async function getAllHeroes() {
 async function updateHero(hero) {
   const db = await openDB();
   const store = db.transaction("heroes", "readwrite").objectStore("heroes");
-  return promisify(store.put(hero));
+  await promisify(store.put(hero));
 }
 
 // ---------- Level 2: Inventory ----------
